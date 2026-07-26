@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+pandas
+requests
+baostock
+openai
+tavily-python
+langgraph
+pydantic
