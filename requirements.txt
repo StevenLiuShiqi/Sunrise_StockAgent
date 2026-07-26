@@ -3,7 +3,6 @@ uvicorn
 pandas
 requests
 baostock
-akshare
 openai
 tavily-python
 langgraph
