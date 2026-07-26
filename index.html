@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>隐私确认闸门 · 演示</title>
+<script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+<style>
+:root {
+  --navy:        #0F2A46;
+  --teal:        #12A594;
+  --teal-light:  #E1F5F1;
+  --teal-dark:   #0B6B60;
+  --amber:       #D97706;
+  --amber-light: #FCEEDD;
+  --amber-dark:  #8A4B05;
+  --bg:          #F7F9FB;
+  --card:        #FFFFFF;
+  --border:      #E3E9EF;
+  --text:        #17293D;
+  --muted:       #5B6B7C;
+  --font-sans:   -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+  --font-mono:   ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  font-family: var(--font-sans);
+  color: var(--text);
+  display: flex;
+  justify-content: center;
+  padding: 48px 20px 80px;
+}
+main { width: 100%; max-width: 740px; }
+
+.eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: var(--teal-dark); text-transform: uppercase; margin-bottom: 6px; }
+h1 { font-size: 24px; color: var(--navy); margin-bottom: 4px; }
+.sub { color: var(--muted); font-size: 14px; line-height: 1.6; margin-bottom: 28px; }
+
+/* ══════════════════════════
+   SEQUENCE DIAGRAM
+══════════════════════════ */
+.seq {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+/* Column headers */
+.seq-header {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+.seq-h {
+  padding: 12px 16px;
+  font-size: 12px; font-weight: 700;
+  text-align: center;
+}
+.seq-h.local { color: var(--teal-dark); border-right: 2px solid var(--teal); }
+.seq-h.cloud { color: var(--amber-dark); }
+
+/* Body: 5 explicit grid rows
+   Row 1 – local events
+   Row 2 – gate / send-arrow  (exchange)
+   Row 3 – cloud events
+   Row 4 – return arrow       (exchange)
+   Row 5 – fusion events
+*/
+.seq-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+/* ── Phase rows ── */
+.seq-phase {
+  display: contents; /* children participate in parent grid */
+}
+
+/* Left col (local) */
+.col-local {
+  border-right: 2px solid var(--teal);
+  padding: 14px 0 10px;
+  min-height: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: visible;
+}
+/* Faded teal – during cloud/fusion */
+.col-local-faded {
+  border-right: 2px solid color-mix(in srgb, var(--teal) 25%, var(--bg));
+  min-height: 24px;
+  overflow: visible;
+}
+
+/* Right col (cloud) */
+.col-cloud {
+  border-left: 2px solid var(--amber);
+  padding: 14px 0 10px;
+  min-height: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: visible;
+}
+/* Faded amber – before/after cloud phase */
+.col-cloud-faded {
+  border-left: 2px solid color-mix(in srgb, var(--amber) 25%, var(--bg));
+  min-height: 24px;
+  overflow: visible;
+}
+.col-empty { min-height: 0; }
+
+/* ── Exchange rows (span both cols) ── */
+.seq-xchange {
+  grid-column: 1 / -1;
+}
+/* Gradient bridge lines at top and bottom */
+.seq-xchange::before,
+.seq-xchange::after {
+  content: '';
+  display: block;
+  height: 2px;
+  background: linear-gradient(90deg, var(--teal) 0%, var(--amber) 100%);
+}
+
+/* ── Nodes ── */
+.seq-node {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 5px 6px 5px 14px;
+  animation: slideIn 0.22s ease;
+}
+.seq-node.local { justify-content: flex-end; padding: 5px 5px 5px 14px; }
+.seq-node.cloud { justify-content: flex-start; padding: 5px 14px 5px 5px; }
+
+.seq-dot {
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 2px solid var(--card);
+  margin-top: 4px;
+}
+.seq-dot.local {
+  background: var(--teal);
+  box-shadow: 0 0 0 1.5px var(--teal);
+  order: 2;
+  margin-right: -6px; /* sit on the border line */
+}
+.seq-dot.cloud {
+  background: var(--amber);
+  box-shadow: 0 0 0 1.5px var(--amber);
+  order: 1;
+  margin-left: -6px;
+}
+
+.seq-label {
+  font-size: 13px;
+  line-height: 1.45;
+  max-width: 240px;
+  color: var(--teal-dark);
+}
+.seq-node.cloud .seq-label { color: var(--amber-dark); text-align: left; }
+.seq-node.local .seq-label { text-align: right; order: 1; }
+
+/* ── Search-result node (expandable) ── */
+.sr-bubble {
+  max-width: 260px;
+  background: var(--amber-light);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.sr-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  user-select: none;
+}
+.sr-header:hover { background: color-mix(in srgb, var(--amber-light) 80%, white); }
+.sr-preview { font-size: 12.5px; color: var(--amber-dark); flex: 1; }
+.sr-meta { font-size: 11px; color: var(--amber-dark); opacity: 0.7; white-space: nowrap; }
+.sr-toggle-btn { font-size: 11px; color: var(--amber-dark); white-space: nowrap; opacity: 0.8; }
+.sr-body {
+  border-top: 1px solid color-mix(in srgb, var(--amber) 30%, white);
+  padding: 8px 10px;
+  display: none;
+}
+.sr-body.open { display: block; }
+.sr-question { font-size: 12px; font-weight: 600; color: var(--amber-dark); margin-bottom: 8px; }
+.sr-snippet {
+  font-size: 12px; color: var(--text); line-height: 1.55;
+  padding: 6px 8px; margin-bottom: 6px;
+  background: var(--card); border-radius: 5px;
+  border-left: 2px solid var(--amber);
+}
+.sr-no-data { font-size: 12px; color: var(--muted); font-style: italic; }
+
+/* ── Structured-result node (expandable, navy theme) ── */
+.struct-bubble {
+  max-width: 280px;
+  background: #EEF2F7;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.struct-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  user-select: none;
+}
+.struct-header:hover { background: #E2E8F0; }
+.struct-title  { font-size: 12.5px; font-weight: 700; color: var(--navy); flex: 1; }
+.struct-meta   { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.struct-toggle { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.struct-body {
+  border-top: 1px solid #C9D4E0;
+  padding: 8px 10px;
+  display: none;
+}
+.struct-body.open { display: block; }
+.struct-section-title {
+  font-size: 11px; font-weight: 700; color: var(--navy);
+  margin: 8px 0 4px; text-transform: uppercase; letter-spacing: 0.05em;
+}
+.struct-section-title:first-child { margin-top: 0; }
+.struct-news-item {
+  font-size: 12px; color: var(--text); line-height: 1.5;
+  padding: 5px 8px; margin-bottom: 5px;
+  background: var(--card); border-radius: 5px;
+  border-left: 2px solid var(--navy);
+}
+.struct-news-date { font-size: 10.5px; color: var(--muted); margin-bottom: 2px; }
+.struct-news-title { font-weight: 600; margin-bottom: 2px; }
+.struct-news-body  { color: var(--muted); font-size: 11.5px; }
+.struct-pill {
+  display: inline-block;
+  background: var(--card); border: 1px solid #C9D4E0;
+  border-radius: 6px; padding: 4px 8px;
+  font-size: 12px; color: var(--text);
+  margin: 2px 0;
+}
+.struct-no-data { font-size: 12px; color: var(--muted); font-style: italic; }
+
+/* ── Gate card ── */
+.gate-wrap { padding: 10px 18px 12px; }
+.gate-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  padding: 8px 14px;
+  background: var(--bg);
+  border-radius: 8px;
+  user-select: none;
+}
+.gate-toggle-row:hover { background: var(--border); }
+.gate-toggle-title { font-size: 13px; font-weight: 700; color: var(--navy); }
+.gate-toggle-icon { font-size: 12px; color: var(--muted); }
+.gate-body { margin-top: 10px; }
+
+.stock-block {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+.stock-head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 5px; }
+.stock-ticker { font-family: var(--font-mono); background: rgba(0,0,0,0.06); padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+.stock-name { font-size: 13px; font-weight: 600; }
+.stock-tag { font-size: 11px; color: var(--teal-dark); background: var(--teal-light); padding: 2px 7px; border-radius: 99px; }
+.stock-signals { font-size: 11.5px; color: var(--muted); margin-bottom: 7px; }
+.qs-label { font-size: 11.5px; font-weight: 700; color: var(--amber-dark); margin-bottom: 3px; }
+.q-item { font-size: 12px; color: var(--text); margin: 2px 0; display: flex; align-items: baseline; gap: 6px; }
+.q-type { font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 99px; white-space: nowrap; flex-shrink: 0; }
+.q-type.factual { background: #E8F5E9; color: #2E7D32; }
+.q-type.news    { background: #E3F2FD; color: #1565C0; }
+.q-type.opinion { background: #F3E5F5; color: #6A1B9A; }
+.stock-meta { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; flex-wrap: wrap; }
+.meta-badge { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 99px; white-space: nowrap; }
+.risk-low    { background: #E8F5E9; color: #2E7D32; }
+.risk-medium { background: #FFF8E1; color: #E65100; }
+.risk-high   { background: #FFEBEE; color: #B71C1C; }
+.period-short { background: #ECEFF1; color: #455A64; }
+.period-mid   { background: #E3F2FD; color: #1565C0; }
+.period-long  { background: #EDE7F6; color: #4527A0; }
+.stock-note { font-size: 11px; color: var(--muted); font-style: italic; margin-bottom: 5px; }
+
+/* ── Picker panel ── */
+.picker-panel { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
+.picker-title { font-size: 17px; font-weight: 700; color: var(--navy); margin-bottom: 4px; }
+.picker-hint  { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
+.picker-grid  { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; margin-bottom: 18px; }
+.picker-card  { border: 2px solid var(--border); border-radius: 12px; padding: 12px 12px 10px; cursor: pointer; position: relative; transition: border-color .15s, background .15s; user-select: none; }
+.picker-card:hover { border-color: var(--teal); }
+.picker-card.selected { border-color: var(--teal); background: var(--teal-light); }
+.picker-check { position: absolute; top: 8px; right: 8px; width: 18px; height: 18px; border-radius: 50%; background: var(--teal); color: #fff; font-size: 11px; display: none; align-items: center; justify-content: center; font-weight: 900; }
+.picker-card.selected .picker-check { display: flex; }
+.picker-card-ticker { font-size: 11px; font-weight: 700; color: var(--muted); font-family: var(--font-mono); }
+.picker-card-name   { font-size: 14px; font-weight: 700; color: var(--text); margin: 2px 0 7px; }
+.picker-card-tags   { display: flex; flex-wrap: wrap; gap: 4px; }
+.picker-card-note   { font-size: 11px; color: var(--muted); font-style: italic; margin-top: 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.picker-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.picker-sel-info { font-size: 13px; color: var(--muted); }
+.picker-sel-info a { color: var(--teal-dark); text-decoration: none; cursor: pointer; }
+.picker-sel-info a:hover { text-decoration: underline; }
+
+/* ── Markdown result ── */
+.result-advice h1,.result-advice h2,.result-advice h3 { font-size: 14px; font-weight: 700; color: var(--navy); margin: 12px 0 4px; }
+.result-advice p  { margin: 4px 0; line-height: 1.65; }
+.result-advice ul,.result-advice ol { padding-left: 20px; margin: 4px 0; }
+.result-advice li { margin: 2px 0; line-height: 1.6; }
+.result-advice strong { color: var(--text); }
+.result-advice hr { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
+
+/* ── Arrow between exchanges ── */
+.xchange-inner { padding: 10px 20px; }
+.arrow-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+}
+.arrow-row::before, .arrow-row::after {
+  content: '';
+  flex: 1;
+  height: 1.5px;
+  background: currentColor;
+  opacity: 0.3;
+}
+.arrow-label { font-size: 12px; font-weight: 600; white-space: nowrap; }
+.arrow-row.send  { color: var(--teal-dark); }
+.arrow-row.return-local { color: var(--navy); }
+
+/* ── Result card ── */
+.result-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 22px 24px;
+  animation: slideIn 0.3s ease;
+  margin-bottom: 20px;
+}
+.result-title { font-size: 13px; font-weight: 700; color: var(--navy); margin-bottom: 14px; }
+.result-advice { border-left: 3px solid var(--teal); padding-left: 16px; }
+.result-advice p { margin: 7px 0; font-size: 14px; line-height: 1.75; }
+
+/* ── Buttons ── */
+.btn-row { display: flex; gap: 10px; margin-top: 14px; }
+button {
+  font-family: inherit; font-size: 14px; font-weight: 600;
+  border-radius: 9px; padding: 10px 20px;
+  border: none; cursor: pointer;
+  transition: opacity 0.15s, transform 0.1s;
+}
+button:hover { opacity: 0.88; }
+button:active { transform: scale(0.97); }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-primary { background: var(--navy); color: #fff; }
+.btn-confirm { background: var(--amber); color: #fff; }
+.btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+
+.note { font-size: 12px; color: var(--muted); line-height: 1.6; }
+.error-msg { color: #B3261E; font-size: 13px; margin-bottom: 12px; }
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+</style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">曦望炒股一体机 · 内部演示</div>
+  <h1>隐私确认闸门</h1>
+  <p class="sub">本地分析先完成，带着问题在闸门等你确认，才会真的联网调研，调研结果再回来综合。</p>
+
+  <div id="pickerWrap" style="margin-bottom:20px;">
+    <div class="picker-panel">
+      <div class="picker-title">选择本次分析的股票</div>
+      <p class="picker-hint">单独分析一支，或多支联合调研后综合建议。</p>
+      <div class="picker-grid" id="pickerGrid"><p style="color:var(--muted);font-size:13px;">加载持仓中…</p></div>
+      <div class="picker-footer">
+        <div class="picker-sel-info">已选 <strong id="selCount">0</strong> 支 · <a id="selectAll">全选</a> / <a id="clearAll">清空</a></div>
+        <button class="btn-primary" id="startBtn" disabled>开始分析</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sequence diagram -->
+  <div class="seq" id="seq" style="display:none">
+    <div class="seq-header">
+      <div class="seq-h local">🔒 本地</div>
+      <div class="seq-h cloud">☁️ 云端</div>
+    </div>
+
+    <div class="seq-body" id="seqBody">
+      <!-- Row 1: local events | empty -->
+      <div class="col-local"  id="colLocal"></div>
+      <div class="col-empty"  id="colEmpty1"></div>
+
+      <!-- Row 2: gate / send-arrow -->
+      <div class="seq-xchange" id="xchangeGate"></div>
+
+      <!-- Row 3: faded local | cloud events  (hidden until approved) -->
+      <div class="col-local-faded" id="colLocalFaded" style="display:none"></div>
+      <div class="col-cloud"       id="colCloud"      style="display:none"></div>
+
+      <!-- Row 4: return arrow (hidden until B done) -->
+      <div class="seq-xchange" id="xchangeReturn" style="display:none"></div>
+
+      <!-- Row 5: fusion local | faded cloud (hidden until return) -->
+      <div class="col-local"       id="colFusion"     style="display:none"></div>
+      <div class="col-cloud-faded" id="colCloudFaded" style="display:none"></div>
+    </div>
+  </div>
+
+  <div id="actionArea"></div>
+
+  <p class="note">🔒 持仓数量和成本价只在本地计算，不上传。</p>
+</main>
+
+<script>
+/* ── refs ── */
+const seqEl      = document.getElementById('seq');
+const colLocal   = document.getElementById('colLocal');
+const colCloud   = document.getElementById('colCloud');
+const colFusion  = document.getElementById('colFusion');
+const xchangeGate   = document.getElementById('xchangeGate');
+const xchangeReturn = document.getElementById('xchangeReturn');
+const actionArea = document.getElementById('actionArea');
+
+/* ── node builders ── */
+function addLocal(text) {
+  const n = document.createElement('div');
+  n.className = 'seq-node local';
+  n.innerHTML = `<span class="seq-label">${text}</span><div class="seq-dot local"></div>`;
+  colLocal.appendChild(n);
+}
+
+function addCloud(text) {
+  const n = document.createElement('div');
+  n.className = 'seq-node cloud';
+  n.innerHTML = `<div class="seq-dot cloud"></div><span class="seq-label">${text}</span>`;
+  colCloud.appendChild(n);
+}
+
+function addFusion(text) {
+  const n = document.createElement('div');
+  n.className = 'seq-node local';
+  n.innerHTML = `<span class="seq-label">${text}</span><div class="seq-dot local"></div>`;
+  colFusion.appendChild(n);
+}
+
+/* ── expandable search result ── */
+let srCounter = 0;
+function addSearchResult(data) {
+  const id = 'sr' + (srCounter++);
+  const preview = data.question.length > 22
+    ? data.question.slice(0, 22) + '…'
+    : data.question;
+
+  const rawCount = data.raw_count ?? data.snippets.length;
+  const filtered = data.snippets.length;
+  const countLabel = rawCount > filtered
+    ? `过滤后 ${filtered}/${rawCount} 条`
+    : `找到 ${filtered} 条`;
+  const snippetRows = filtered
+    ? data.snippets.map(s =>
+        `<div class="sr-snippet">${s.slice(0, 300)}${s.length > 300 ? '…' : ''}</div>`
+      ).join('')
+    : '<div class="sr-no-data">未找到相关信息</div>';
+
+  const n = document.createElement('div');
+  n.className = 'seq-node cloud';
+  n.style.alignItems = 'flex-start';
+  n.innerHTML = `
+    <div class="seq-dot cloud" style="margin-top:10px;"></div>
+    <div class="sr-bubble">
+      <div class="sr-header" onclick="toggleSr('${id}')">
+        <span class="sr-preview">${preview}</span>
+        <span class="sr-meta">${countLabel}</span>
+        <span class="sr-toggle-btn" id="${id}-btn">展开 ▼</span>
+      </div>
+      <div class="sr-body" id="${id}">
+        <div class="sr-question">${data.question}</div>
+        ${snippetRows}
+      </div>
+    </div>`;
+  colCloud.appendChild(n);
+}
+
+function toggleSr(id) {
+  const body = document.getElementById(id);
+  const btn  = document.getElementById(id + '-btn');
+  const open = body.classList.toggle('open');
+  btn.textContent = open ? '收起 ▲' : '展开 ▼';
+}
+
+/* ── gate ── */
+let gatePreviewData = null;
+let gateExpanded = true;
+
+function showGate(threadId, preview) {
+  gatePreviewData = preview;
+
+  const stockBlocks = preview.research_questions.map(item => {
+    const f = item.findings;
+    const valParts = [];
+    if (f.pe_ttm)   valParts.push(`PE=${f.pe_ttm.toFixed(1)}x`);
+    if (f.pb)       valParts.push(`PB=${f.pb.toFixed(2)}x`);
+    if (f.mcap_yi)  valParts.push(`市值${f.mcap_yi.toFixed(0)}亿`);
+    const signals = [
+      `均线：${f.ma_signal}`,
+      `量能：${f.vol_signal}`,
+      `偏离MA20：${f.ma20_deviation}%`,
+      `近5日：${f.price_change_5d}%`,
+      ...(valParts.length ? [valParts.join('  ')] : []),
+    ].join('　');
+    const signals2Parts = [];
+    if (f.rsi_signal)  signals2Parts.push(f.rsi_signal);
+    if (f.macd_signal) signals2Parts.push(`MACD：${f.macd_signal}`);
+    if (f.kdj_signal)  signals2Parts.push(`KDJ：${f.kdj_signal}`);
+    if (f.turnover)    signals2Parts.push(`换手率：${f.turnover}%（5日均${f.turnover_avg5}%）`);
+    const signals2 = signals2Parts.join('　');
+    const tags = (item.industry_tags || [])
+      .map(t => `<span class="stock-tag">${t}</span>`).join('');
+
+    const RISK_LABEL   = { low: '低风险', medium: '中等风险', high: '高风险' };
+    const RISK_CLASS   = { low: 'risk-low', medium: 'risk-medium', high: 'risk-high' };
+    const PERIOD_LABEL = { short: '短线', mid: '中线', long: '长线' };
+    const PERIOD_CLASS = { short: 'period-short', mid: 'period-mid', long: 'period-long' };
+    const rl = item.risk_level || 'medium';
+    const hp = item.hold_period || 'mid';
+    const metaBadges = [
+      `<span class="meta-badge ${RISK_CLASS[rl] || 'risk-medium'}">${RISK_LABEL[rl] || rl}</span>`,
+      `<span class="meta-badge ${PERIOD_CLASS[hp] || 'period-mid'}">${PERIOD_LABEL[hp] || hp}</span>`,
+    ].join('');
+
+    const TYPE_LABEL = { factual: '公告', news: '新闻', opinion: '分析' };
+    const qs = item.questions
+      .map(q => {
+        const t = q.type || 'news';
+        const label = TYPE_LABEL[t] || t;
+        return `<div class="q-item"><span class="q-type ${t}">${label}</span><span>· ${q.question}</span></div>`;
+      }).join('');
+    return `
+      <div class="stock-block">
+        <div class="stock-head">
+          <span class="stock-ticker">${item.ticker}</span>
+          <span class="stock-name">${item.name}</span>
+          ${tags}
+        </div>
+        <div class="stock-meta">${metaBadges}</div>
+        ${item.notes ? `<div class="stock-note">📌 ${item.notes}</div>` : ''}
+        <div class="stock-signals">${signals}</div>
+        ${signals2 ? `<div class="stock-signals" style="margin-top:3px;font-size:11px;">${signals2}</div>` : ''}
+        <div class="qs-label">将带以下问题发给云端：</div>
+        ${qs}
+      </div>`;
+  }).join('');
+
+  xchangeGate.innerHTML = `
+    <div class="gate-wrap">
+      <div class="gate-toggle-row" onclick="toggleGate()">
+        <span class="gate-toggle-title">⏸ 研究清单（${preview.research_questions.length} 支股票）</span>
+        <span class="gate-toggle-icon" id="gateIcon">▲ 折叠</span>
+      </div>
+      <div class="gate-body" id="gateBody">
+        ${stockBlocks}
+        <div class="btn-row" id="gateBtns">
+          <button class="btn-ghost" id="cancelBtn">取消，只看本地</button>
+          <button class="btn-confirm" id="confirmBtn">确认发送</button>
+        </div>
+      </div>
+    </div>`;
+
+  document.getElementById('confirmBtn').onclick = () => resolveFlow(threadId, 'approved');
+  document.getElementById('cancelBtn').onclick  = () => resolveFlow(threadId, 'rejected');
+}
+
+/* ── Structured result (expandable cloud node) ── */
+let structCounter = 0;
+function addStructuredResult(data) {
+  const id = 'struct' + (structCounter++);
+  const newsCount = (data.news || []).length;
+  const epsCount  = (data.consensus_eps || []).length;
+  const hasHot    = !!data.hot_reason;
+  const parts = [];
+  if (newsCount)  parts.push(`新闻${newsCount}条`);
+  if (hasHot)     parts.push('题材');
+  if (epsCount)   parts.push(`预期${epsCount}条`);
+  const metaText = parts.length ? parts.join('·') : '无数据';
+
+  // News rows
+  const newsRows = newsCount
+    ? (data.news || []).map(n => `
+        <div class="struct-news-item">
+          <div class="struct-news-date">${n['发布时间'] || ''}</div>
+          <div class="struct-news-title">${n['新闻标题'] || ''}</div>
+          <div class="struct-news-body">${(n['新闻内容'] || '').slice(0, 120)}…</div>
+        </div>`).join('')
+    : '<div class="struct-no-data">新闻拉取失败或无数据</div>';
+
+  // Hot reason
+  const hotRow = hasHot
+    ? `<div class="struct-pill">🔥 ${data.hot_reason}</div>`
+    : '<div class="struct-no-data">今日未上强势股榜</div>';
+
+  // EPS rows
+  const epsRows = epsCount
+    ? (data.consensus_eps || []).map(row =>
+        `<div class="struct-pill">${Object.entries(row).map(([k,v]) => `${k}: ${v}`).join('  ')}</div>`
+      ).join('')
+    : '<div class="struct-no-data">预期数据拉取失败或无数据</div>';
+
+  const n = document.createElement('div');
+  n.className = 'seq-node cloud';
+  n.style.alignItems = 'flex-start';
+  n.innerHTML = `
+    <div class="seq-dot cloud" style="margin-top:10px;"></div>
+    <div class="struct-bubble">
+      <div class="struct-header" onclick="toggleStruct('${id}')">
+        <span class="struct-title">🗂 ${data.name} 结构化数据</span>
+        <span class="struct-meta">${metaText}</span>
+        <span class="struct-toggle" id="${id}-btn">展开 ▼</span>
+      </div>
+      <div class="struct-body" id="${id}">
+        <div class="struct-section-title">📰 个股新闻</div>
+        ${newsRows}
+        <div class="struct-section-title">🔥 题材归因</div>
+        ${hotRow}
+        <div class="struct-section-title">📊 分析师一致预期 EPS</div>
+        ${epsRows}
+      </div>
+    </div>`;
+  colCloud.appendChild(n);
+}
+
+function toggleStruct(id) {
+  const body = document.getElementById(id);
+  const btn  = document.getElementById(id + '-btn');
+  const open = body.classList.toggle('open');
+  btn.textContent = open ? '收起 ▲' : '展开 ▼';
+}
+
+function toggleGate() {
+  const body = document.getElementById('gateBody');
+  const icon = document.getElementById('gateIcon');
+  if (!body) return;
+  gateExpanded = !gateExpanded;
+  body.style.display = gateExpanded ? '' : 'none';
+  icon.textContent   = gateExpanded ? '▲ 折叠' : '▼ 展开';
+}
+
+/* ── resolve (confirm / cancel) ── */
+async function resolveFlow(threadId, action) {
+  document.getElementById('gateBtns')?.querySelectorAll('button')
+    .forEach(b => b.disabled = true);
+
+  if (action === 'rejected') {
+    document.getElementById('gateBtns')?.remove();
+    xchangeGate.innerHTML += `
+      <div class="xchange-inner">
+        <div class="arrow-row send"><span class="arrow-label">🚫 已取消，结果仅保留本地</span></div>
+      </div>`;
+    await fetch(`/research/confirm/${threadId}`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ action }),
+    });
+    actionArea.innerHTML = `<button class="btn-ghost" onclick="location.reload()">再来一次</button>`;
+    return;
+  }
+
+  /* Approved: collapse gate, show send arrow, reveal cloud columns */
+  document.getElementById('gateBtns')?.remove();
+  if (gateExpanded) toggleGate(); // auto-collapse after confirm
+
+  // Show send arrow inside gate exchange
+  const arrowDiv = document.createElement('div');
+  arrowDiv.className = 'xchange-inner';
+  arrowDiv.innerHTML = `<div class="arrow-row send"><span class="arrow-label">研究清单已发送 →</span></div>`;
+  xchangeGate.appendChild(arrowDiv);
+
+  // Reveal cloud phase columns
+  document.getElementById('colLocalFaded').style.display = '';
+  document.getElementById('colCloud').style.display      = '';
+
+  await fetch(`/research/confirm/${threadId}`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ action }),
+  });
+
+  const watcher = new EventSource(`/research/watch/${threadId}`);
+
+  watcher.onmessage = function(e) {
+    const data = JSON.parse(e.data);
+
+    if (data.type === 'cloud_progress') {
+      addCloud(data.text);
+    }
+
+    if (data.type === 'structured_result') {
+      addStructuredResult(data);
+    }
+
+    if (data.type === 'search_result') {
+      addSearchResult(data);
+    }
+
+    if (data.type === 'return_arrow') {
+      /* Show return arrow exchange row + reveal fusion columns */
+      xchangeReturn.style.display = '';
+      xchangeReturn.innerHTML = `
+        <div class="xchange-inner">
+          <div class="arrow-row return-local">
+            <span class="arrow-label">← 调研结果已返回本地</span>
+          </div>
+        </div>`;
+      document.getElementById('colFusion').style.display    = '';
+      document.getElementById('colCloudFaded').style.display = '';
+    }
+
+    if (data.type === 'progress') {
+      /* During watch phase, plain progress events are local fusion steps */
+      addFusion(data.text);
+    }
+
+    if (data.type === 'done') {
+      watcher.close();
+      const r = data.fusion_result || {};
+      const adviceHtml = typeof marked !== 'undefined'
+        ? marked.parse(r.advice || '（无建议）')
+        : (r.advice || '（无建议）').split('\n').filter(l => l.trim()).map(l => `<p>${l}</p>`).join('');
+      actionArea.innerHTML = `
+        <div class="result-card">
+          <div class="result-title">综合建议</div>
+          <div class="result-advice">${adviceHtml}</div>
+          <div class="btn-row" style="margin-top:16px;">
+            <button class="btn-ghost" onclick="location.reload()">再来一次</button>
+          </div>
+        </div>`;
+    }
+
+    if (data.type === 'error') {
+      watcher.close();
+      actionArea.innerHTML = `<p class="error-msg">出错了：${data.text}</p>
+        <button class="btn-ghost" onclick="location.reload()">重试</button>`;
+    }
+  };
+
+  watcher.onerror = function() {
+    watcher.close();
+    actionArea.innerHTML = `<p class="error-msg">连接中断，请重试。</p>
+      <button class="btn-ghost" onclick="location.reload()">重试</button>`;
+  };
+}
+
+/* ── picker ── */
+(function initPicker() {
+  const grid     = document.getElementById('pickerGrid');
+  const selCount = document.getElementById('selCount');
+  const startBtn = document.getElementById('startBtn');
+  const selAll   = document.getElementById('selectAll');
+  const clrAll   = document.getElementById('clearAll');
+  let   selected = new Set();
+  let   cards    = [];
+
+  function updateUI() {
+    selCount.textContent = selected.size;
+    startBtn.disabled    = selected.size === 0;
+    startBtn.textContent = selected.size > 0 ? `开始分析（${selected.size} 支）` : '开始分析';
+    cards.forEach(el => {
+      el.classList.toggle('selected', selected.has(el.dataset.ticker));
+    });
+  }
+
+  fetch('/holdings').then(r => r.json()).then(holdings => {
+    grid.innerHTML = '';
+    const RISK_LABEL   = { low: '低风险', medium: '中等风险', high: '高风险' };
+    const RISK_CLASS   = { low: 'risk-low', medium: 'risk-medium', high: 'risk-high' };
+    const PERIOD_LABEL = { short: '短线', mid: '中线', long: '长线' };
+    const PERIOD_CLASS = { short: 'period-short', mid: 'period-mid', long: 'period-long' };
+
+    holdings.forEach(h => {
+      const rl   = h.risk_level  || 'medium';
+      const hp   = h.hold_period || 'mid';
+      const tags = (h.industry_tags || []).map(t => `<span class="stock-tag">${t}</span>`).join('');
+      const card = document.createElement('div');
+      card.className   = 'picker-card';
+      card.dataset.ticker = h.ticker;
+      card.innerHTML   = `
+        <div class="picker-check">✓</div>
+        <div class="picker-card-ticker">${h.ticker}</div>
+        <div class="picker-card-name">${h.name}</div>
+        <div class="picker-card-tags">
+          ${tags}
+          <span class="meta-badge ${RISK_CLASS[rl]||'risk-medium'}">${RISK_LABEL[rl]||rl}</span>
+          <span class="meta-badge ${PERIOD_CLASS[hp]||'period-mid'}">${PERIOD_LABEL[hp]||hp}</span>
+        </div>
+        ${h.notes ? `<div class="picker-card-note">${h.notes}</div>` : ''}`;
+      card.onclick = () => {
+        if (selected.has(h.ticker)) selected.delete(h.ticker);
+        else selected.add(h.ticker);
+        updateUI();
+      };
+      grid.appendChild(card);
+      cards.push(card);
+    });
+  }).catch(() => {
+    grid.innerHTML = '<p style="color:red;font-size:13px;">加载持仓失败，检查 uvicorn 是否运行。</p>';
+  });
+
+  selAll.onclick = (e) => { e.preventDefault(); cards.forEach(c => selected.add(c.dataset.ticker)); updateUI(); };
+  clrAll.onclick = (e) => { e.preventDefault(); selected.clear(); updateUI(); };
+
+  startBtn.onclick = function() {
+    const tickers = [...selected].join(',');
+    document.getElementById('pickerWrap').style.display = 'none';
+    seqEl.style.display = 'block';
+
+    const source = new EventSource(`/research/stream?tickers=${encodeURIComponent(tickers)}`);
+
+    source.onmessage = function(e) {
+      const data = JSON.parse(e.data);
+      if (data.type === 'progress') addLocal(data.text);
+      if (data.type === 'ready') { source.close(); showGate(data.thread_id, data.preview); }
+      if (data.type === 'error') {
+        source.close();
+        actionArea.innerHTML = `<p class="error-msg">出错了：${data.text}</p>
+          <button class="btn-ghost" onclick="location.reload()">重试</button>`;
+      }
+    };
+    source.onerror = function() {
+      source.close();
+      actionArea.innerHTML = `<p class="error-msg">连接中断，检查 uvicorn 是否在运行。</p>
+        <button class="btn-ghost" onclick="location.reload()">重试</button>`;
+    };
+  };
+})();
+</script>
+</body>
+</html>
