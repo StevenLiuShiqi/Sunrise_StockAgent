@@ -67,21 +67,12 @@ def _load_env(path: str = ".env") -> None:
 
 _load_env()
 
-_llm_key    = os.environ.get("LLM_API_KEY", "").strip()
-_tavily_key = os.environ.get("TAVILY_API_KEY", "").strip()
+# ⚠️ 内部测试用：内嵌兜底密钥。测试结束后请去后台轮换这两个 key，并改回纯环境变量。
+_FALLBACK_LLM_KEY    = "sk-af8678304a6d4933b15435ed050d9726"
+_FALLBACK_TAVILY_KEY = "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"
 
-if not _llm_key or not _tavily_key:
-    # 打印容器里实际可见的相关变量名，帮助定位 Railway 变量作用域问题
-    _visible = sorted(
-        k for k in os.environ
-        if any(t in k.upper() for t in ("KEY", "API", "LLM", "TAVILY", "TOKEN"))
-    )
-    print(f"🔍 容器内可见的相关环境变量名: {_visible or '（一个都没有）'}", flush=True)
-
-if not _llm_key:
-    raise RuntimeError("❌ 环境变量 LLM_API_KEY 未设置，请在 Railway Variables 中添加并重新部署。")
-if not _tavily_key:
-    raise RuntimeError("❌ 环境变量 TAVILY_API_KEY 未设置，请在 Railway Variables 中添加并重新部署。")
+_llm_key    = os.environ.get("LLM_API_KEY", "").strip()    or _FALLBACK_LLM_KEY
+_tavily_key = os.environ.get("TAVILY_API_KEY", "").strip() or _FALLBACK_TAVILY_KEY
 
 llm = OpenAI(
     api_key=_llm_key,
