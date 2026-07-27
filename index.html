@@ -550,19 +550,7 @@ function showGate(threadId, preview) {
       `<span class="meta-badge ${PERIOD_CLASS[hp] || 'period-mid'}">${PERIOD_LABEL[hp] || hp}</span>`,
     ].join('');
 
-    // 持仓 + 浮盈亏
-    let posHtml = '';
-    if (item.qty || item.cost) {
-      let pos = `持 ${item.qty} 股 · 成本 ${item.cost}`;
-      if (item.price && item.cost) {
-        const pnl = (item.price - item.cost) / item.cost * 100;
-        const cls = pnl >= 0 ? 'pnl-up' : 'pnl-down';
-        const sign = pnl >= 0 ? '浮盈' : '浮亏';
-        pos += ` · 现价 ${item.price.toFixed(2)} <span class="${cls}">${sign} ${Math.abs(pnl).toFixed(2)}%</span>`;
-      }
-      posHtml = `<div class="stock-pos">${pos}</div>`;
-    }
-
+    // 确认清单即将发往云端，故不显示任何持仓/成本，避免误会
     const TYPE_LABEL = { factual: '公告', news: '新闻', opinion: '分析' };
     const qs = item.questions
       .map(q => {
@@ -578,7 +566,6 @@ function showGate(threadId, preview) {
           ${tags}
         </div>
         <div class="stock-meta">${metaBadges}</div>
-        ${posHtml}
         ${item.notes ? `<div class="stock-note">📌 ${item.notes}</div>` : ''}
         <div class="stock-signals">${signals}</div>
         ${signals2 ? `<div class="stock-signals" style="margin-top:3px;font-size:11px;">${signals2}</div>` : ''}
