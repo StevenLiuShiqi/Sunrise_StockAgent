@@ -70,6 +70,14 @@ _load_env()
 _llm_key    = os.environ.get("LLM_API_KEY", "").strip()
 _tavily_key = os.environ.get("TAVILY_API_KEY", "").strip()
 
+if not _llm_key or not _tavily_key:
+    # 打印容器里实际可见的相关变量名，帮助定位 Railway 变量作用域问题
+    _visible = sorted(
+        k for k in os.environ
+        if any(t in k.upper() for t in ("KEY", "API", "LLM", "TAVILY", "TOKEN"))
+    )
+    print(f"🔍 容器内可见的相关环境变量名: {_visible or '（一个都没有）'}", flush=True)
+
 if not _llm_key:
     raise RuntimeError("❌ 环境变量 LLM_API_KEY 未设置，请在 Railway Variables 中添加并重新部署。")
 if not _tavily_key:
