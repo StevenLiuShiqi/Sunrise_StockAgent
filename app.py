@@ -578,8 +578,21 @@ def agent_a_node(state: State) -> dict:
 # ================= 确认节点 =================
 
 def human_confirm_node(state: State) -> dict:
+    # 持仓量/成本/现价只合并进发往本地浏览器的确认清单，供用户核对浮盈亏；
+    # 绝不写回 State 的 research_questions —— 后者是 Agent B 云端调研读取的对象，必须纯净。
+    a_map = {a["ticker"]: a for a in state["agent_a_result"]}
+    display_questions = [
+        {
+            **rq,
+            "qty":   a_map.get(rq["ticker"], {}).get("qty", 0),
+            "cost":  a_map.get(rq["ticker"], {}).get("cost", 0),
+            "price": a_map.get(rq["ticker"], {}).get("price")
+                     or a_map.get(rq["ticker"], {}).get("close") or 0,
+        }
+        for rq in state["research_questions"]
+    ]
     decision = interrupt({
-        "research_questions": state["research_questions"],
+        "research_questions": display_questions,
     })
     return {"user_decision": decision["action"]}
 
