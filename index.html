@@ -294,6 +294,9 @@ h1 { font-size: 24px; color: var(--navy); margin-bottom: 4px; }
 .period-mid   { background: #E3F2FD; color: #1565C0; }
 .period-long  { background: #EDE7F6; color: #4527A0; }
 .stock-note { font-size: 11px; color: var(--muted); font-style: italic; margin-bottom: 5px; }
+.stock-pos { font-size: 12px; font-weight: 600; color: var(--text); font-family: var(--font-mono); margin-bottom: 6px; }
+.pnl-up   { color: #C62828; font-weight: 700; }
+.pnl-down { color: #2E7D32; font-weight: 700; }
 
 /* ── Picker panel ── */
 .picker-panel { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 24px; }
@@ -306,7 +309,8 @@ h1 { font-size: 24px; color: var(--navy); margin-bottom: 4px; }
 .picker-check { position: absolute; top: 8px; right: 8px; width: 18px; height: 18px; border-radius: 50%; background: var(--teal); color: #fff; font-size: 11px; display: none; align-items: center; justify-content: center; font-weight: 900; }
 .picker-card.selected .picker-check { display: flex; }
 .picker-card-ticker { font-size: 11px; font-weight: 700; color: var(--muted); font-family: var(--font-mono); }
-.picker-card-name   { font-size: 14px; font-weight: 700; color: var(--text); margin: 2px 0 7px; }
+.picker-card-name   { font-size: 14px; font-weight: 700; color: var(--text); margin: 2px 0 4px; }
+.picker-card-pos    { font-size: 11.5px; font-weight: 600; color: var(--teal-dark); font-family: var(--font-mono); margin-bottom: 7px; }
 .picker-card-tags   { display: flex; flex-wrap: wrap; gap: 4px; }
 .picker-card-note   { font-size: 11px; color: var(--muted); font-style: italic; margin-top: 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .picker-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
@@ -546,6 +550,19 @@ function showGate(threadId, preview) {
       `<span class="meta-badge ${PERIOD_CLASS[hp] || 'period-mid'}">${PERIOD_LABEL[hp] || hp}</span>`,
     ].join('');
 
+    // 持仓 + 浮盈亏
+    let posHtml = '';
+    if (item.qty || item.cost) {
+      let pos = `持 ${item.qty} 股 · 成本 ${item.cost}`;
+      if (item.price && item.cost) {
+        const pnl = (item.price - item.cost) / item.cost * 100;
+        const cls = pnl >= 0 ? 'pnl-up' : 'pnl-down';
+        const sign = pnl >= 0 ? '浮盈' : '浮亏';
+        pos += ` · 现价 ${item.price.toFixed(2)} <span class="${cls}">${sign} ${Math.abs(pnl).toFixed(2)}%</span>`;
+      }
+      posHtml = `<div class="stock-pos">${pos}</div>`;
+    }
+
     const TYPE_LABEL = { factual: '公告', news: '新闻', opinion: '分析' };
     const qs = item.questions
       .map(q => {
@@ -561,6 +578,7 @@ function showGate(threadId, preview) {
           ${tags}
         </div>
         <div class="stock-meta">${metaBadges}</div>
+        ${posHtml}
         ${item.notes ? `<div class="stock-note">📌 ${item.notes}</div>` : ''}
         <div class="stock-signals">${signals}</div>
         ${signals2 ? `<div class="stock-signals" style="margin-top:3px;font-size:11px;">${signals2}</div>` : ''}
@@ -798,10 +816,12 @@ async function resolveFlow(threadId, action) {
       const card = document.createElement('div');
       card.className   = 'picker-card';
       card.dataset.ticker = h.ticker;
+      const posText = (h.qty ? `持 ${h.qty} 股` : '') + (h.cost ? ` · 成本 ${h.cost}` : '');
       card.innerHTML   = `
         <div class="picker-check">✓</div>
         <div class="picker-card-ticker">${h.ticker}</div>
         <div class="picker-card-name">${h.name}</div>
+        ${posText ? `<div class="picker-card-pos">${posText}</div>` : ''}
         <div class="picker-card-tags">
           ${tags}
           <span class="meta-badge ${RISK_CLASS[rl]||'risk-medium'}">${RISK_LABEL[rl]||rl}</span>

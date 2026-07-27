@@ -556,6 +556,9 @@ def agent_a_node(state: State) -> dict:
         research_questions.append({
             "ticker":        analysis["ticker"],
             "name":          analysis["name"],
+            "qty":           analysis.get("qty", 0),
+            "cost":          analysis.get("cost", 0),
+            "price":         analysis.get("price") or analysis.get("close") or 0,
             "industry_tags": analysis["industry_tags"],
             "risk_level":    analysis.get("risk_level", "medium"),
             "hold_period":   analysis.get("hold_period", "mid"),
@@ -687,7 +690,7 @@ def fusion_node(state: State) -> dict:
     _emit_event({"type": "return_arrow"})
     _emit("🧠 DeepSeek 综合分析中…")
 
-    # 构建脱敏提示，严禁传入 qty / cost
+    # 构建提示：结合持仓量、成本、浮盈亏一起分析
     sections = []
     b_map = {item["ticker"]: item for item in state["agent_b_result"]}
 
@@ -700,6 +703,20 @@ def fusion_node(state: State) -> dict:
             f"  偏离MA20：{h.get('ma20_deviation', '-')}%\n"
             f"  近5日涨跌：{h.get('price_change_5d', '-')}%"
         )
+
+        # 持仓信息：持仓量、成本、当前价、浮盈亏
+        qty     = h.get("qty", 0)
+        cost    = h.get("cost", 0)
+        cur     = h.get("price") or h.get("close") or 0
+        position_text = f"  持仓：{qty} 股，成本价 {cost}"
+        if cur and cost:
+            pnl_pct = (cur - cost) / cost * 100
+            pnl_amt = (cur - cost) * qty
+            status  = "浮盈" if pnl_pct >= 0 else "浮亏"
+            position_text += (
+                f"，现价 {round(cur, 2)}，"
+                f"{status} {abs(round(pnl_pct, 2))}%（约 {round(pnl_amt, 0):.0f} 元）"
+            )
 
         structured_text = ""
         tavily_text     = ""
@@ -745,17 +762,18 @@ def fusion_node(state: State) -> dict:
 
         sections.append(
             f"【{name}（{ticker}）】\n"
+            f"我的持仓：\n{position_text}\n\n"
             f"本地技术信号：\n{findings}\n\n"
             f"云端数据：\n{cloud_section or '  无'}"
         )
 
     prompt = (
-        "你是一位严谨的 A 股研究分析师。请根据以下每只股票的本地技术信号和云端调研信息，"
-        "给出综合投资建议。\n\n"
+        "你是一位严谨的 A 股研究分析师。请根据以下每只股票的持仓情况、本地技术信号和云端调研信息，"
+        "给出结合持仓成本的个性化投资建议。\n\n"
         "要求：\n"
-        "- 每只股票给出：①一句话综合判断 ②建议操作（持有/减仓/加仓/观望）③一条主要风险提示\n"
-        "- 不要提及持仓数量和成本价\n"
-        "- 建议要有依据，紧扣具体信号\n\n"
+        "- 每只股票给出：①一句话综合判断 ②建议操作（持有/减仓/加仓/清仓/观望）③一条主要风险提示\n"
+        "- 结合当前浮盈/浮亏状态给出针对性建议（如浮亏是否补仓、浮盈是否止盈）\n"
+        "- 建议要有依据，紧扣具体信号和持仓成本\n\n"
         + "\n\n---\n\n".join(sections)
     )
 
@@ -817,11 +835,13 @@ def index():
 
 @app.get("/holdings")
 def get_holdings_list():
-    """返回持仓展示字段（不含 qty/cost）供前端选股面板使用。"""
+    """返回持仓展示字段供前端选股面板使用（含 qty/cost）。"""
     return [
         {
             "ticker":        h["ticker"],
             "name":          h["name"],
+            "qty":           h.get("qty", 0),
+            "cost":          h.get("cost", 0),
             "industry_tags": h.get("industry_tags", []),
             "risk_level":    h.get("risk_level", "medium"),
             "hold_period":   h.get("hold_period", "mid"),
