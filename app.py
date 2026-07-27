@@ -446,9 +446,8 @@ def filter_snippets(question: str, snippets: list[str]) -> list[str]:
     joined = "\n---\n".join(f"[{i+1}] {s[:500]}" for i, s in enumerate(snippets))
     prompt = (
         f"以下是搜索「{question}」得到的片段。\n"
-        "判断每个片段是否与该问题相关（涉及同一家公司、同一话题或能提供有用背景即算相关，"
-        "只有明显跑题、广告、纯无关内容才排除）。\n"
-        "输出相关片段的编号，用英文逗号分隔，如 1,3。若确实全部无关才只输出：无\n\n"
+        "判断每个片段是否包含可以回答该问题的具体信息（不是泛泛背景）。\n"
+        "只输出相关片段的编号，用英文逗号分隔，如 1,3。若全部无关则只输出：无\n\n"
         f"{joined}"
     )
     try:
@@ -655,10 +654,6 @@ def agent_b_node(state: State) -> dict:
                     pass
 
             filtered = filter_snippets(q_text, raw_snippets) if raw_snippets else []
-
-            # 保底：过滤全砍但确实搜到了内容时，保留前 2 条，避免 fusion 无料可用
-            if not filtered and raw_snippets:
-                filtered = raw_snippets[:2]
 
             _emit_event({
                 "type":      "search_result",
