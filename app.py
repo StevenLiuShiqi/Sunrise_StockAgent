@@ -67,11 +67,19 @@ def _load_env(path: str = ".env") -> None:
 
 _load_env()
 
+_llm_key    = os.environ.get("LLM_API_KEY", "").strip()
+_tavily_key = os.environ.get("TAVILY_API_KEY", "").strip()
+
+if not _llm_key:
+    raise RuntimeError("❌ 环境变量 LLM_API_KEY 未设置，请在 Railway Variables 中添加并重新部署。")
+if not _tavily_key:
+    raise RuntimeError("❌ 环境变量 TAVILY_API_KEY 未设置，请在 Railway Variables 中添加并重新部署。")
+
 llm = OpenAI(
-    api_key=os.environ.get("LLM_API_KEY", ""),
+    api_key=_llm_key,
     base_url="https://api.deepseek.com",
 )
-tavily = TavilyClient(api_key=os.environ.get("TAVILY_API_KEY", ""))
+tavily = TavilyClient(api_key=_tavily_key)
 
 # BaoStock 用自己的 socket 协议，不走 HTTP/代理，登录一次全局复用
 _bs_login = bs.login()
