@@ -683,14 +683,17 @@ def agent_b_node(state: State) -> dict:
     return {"agent_b_result": results}
 
 
-# ================= LLM②：fusion =================
+# ================= LLM②：本地融合分析 =================
+# 这一步在【本地】进行：云端只把公开新闻/调研结果传回本地，
+# 持仓量、成本这些个人数据从不上传云端，只在本地由 AI 结合分析。
+# 当前临时调用 DeepSeek API，后续将替换为完全本地运行的模型。
 
 def fusion_node(state: State) -> dict:
-    # Signal that cloud results are returning to local for synthesis
+    # 云端调研结果已返回本地，进入本地融合分析
     _emit_event({"type": "return_arrow"})
-    _emit("🧠 DeepSeek 综合分析中…")
+    _emit("🔒 本地 AI 结合你的持仓与成本，综合分析中…")
 
-    # 构建提示：结合持仓量、成本、浮盈亏一起分析
+    # 构建提示：结合持仓量、成本、浮盈亏一起分析（全程本地）
     sections = []
     b_map = {item["ticker"]: item for item in state["agent_b_result"]}
 
@@ -785,7 +788,7 @@ def fusion_node(state: State) -> dict:
             temperature=0.5,
         )
         advice = resp.choices[0].message.content.strip()
-        _emit("✅ 综合建议生成完毕")
+        _emit("✅ 本地综合建议生成完毕")
     except Exception as e:
         _emit(f"⚠️  建议生成失败（{type(e).__name__}）")
         advice = "（建议生成失败，请检查 LLM_API_KEY）"
