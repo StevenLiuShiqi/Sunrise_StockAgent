@@ -36,7 +36,12 @@ urllib.request.install_opener(
     urllib.request.build_opener(urllib.request.ProxyHandler({}))
 )
 
-import akshare as ak
+try:
+    import akshare as ak
+    _AKSHARE_AVAILABLE = True
+except ImportError:
+    ak = None
+    _AKSHARE_AVAILABLE = False
 from openai import OpenAI
 from tavily import TavilyClient
 from fastapi import FastAPI, HTTPException
@@ -467,14 +472,15 @@ def _akshare_research(ticker: str, name: str) -> dict:
     def cp(text: str) -> None:
         _emit_event({"type": "cloud_progress", "text": text})
 
-    # ① 个股新闻（东方财富，可能受代理影响）
-    cp(f"📰 {name} 拉取个股新闻…")
-    try:
-        df = ak.stock_news_em(symbol=ticker)
-        result["news"] = df[["发布时间", "新闻标题", "新闻内容"]].head(5).to_dict("records") if not df.empty else []
-        cp(f"  ✅ 新闻 {len(result['news'])} 条")
-    except Exception as e:
-        cp(f"  ⚠️ 新闻拉取失败（{type(e).__name__}）")
+    # ① 个股新闻（东方财富，需要 akshare）
+    if _AKSHARE_AVAILABLE:
+        cp(f"📰 {name} 拉取个股新闻…")
+        try:
+            df = ak.stock_news_em(symbol=ticker)
+            result["news"] = df[["发布时间", "新闻标题", "新闻内容"]].head(5).to_dict("records") if not df.empty else []
+            cp(f"  ✅ 新闻 {len(result['news'])} 条")
+        except Exception as e:
+            cp(f"  ⚠️ 新闻拉取失败（{type(e).__name__}）")
 
     # ② 题材归因（同花顺强势股榜，HTTP 无 TLS，代理影响小）
     cp(f"🔥 {name} 拉取题材归因…")
@@ -488,14 +494,15 @@ def _akshare_research(ticker: str, name: str) -> dict:
     except Exception as e:
         cp(f"  ⚠️ 题材归因拉取失败（{type(e).__name__}）")
 
-    # ③ 分析师一致预期 EPS（同花顺）
-    cp(f"📊 {name} 拉取分析师一致预期…")
-    try:
-        df = ak.stock_profit_forecast_ths(symbol=ticker, indicator="预测年报每股收益")
-        result["consensus_eps"] = df.head(3).to_dict("records") if not df.empty else []
-        cp(f"  ✅ 预期数据 {len(result['consensus_eps'])} 条")
-    except Exception as e:
-        cp(f"  ⚠️ 一致预期拉取失败（{type(e).__name__}）")
+    # ③ 分析师一致预期 EPS（同花顺，需要 akshare）
+    if _AKSHARE_AVAILABLE:
+        cp(f"📊 {name} 拉取分析师一致预期…")
+        try:
+            df = ak.stock_profit_forecast_ths(symbol=ticker, indicator="预测年报每股收益")
+            result["consensus_eps"] = df.head(3).to_dict("records") if not df.empty else []
+            cp(f"  ✅ 预期数据 {len(result['consensus_eps'])} 条")
+        except Exception as e:
+            cp(f"  ⚠️ 一致预期拉取失败（{type(e).__name__}）")
 
     return result
 
