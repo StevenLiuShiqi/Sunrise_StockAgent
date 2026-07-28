@@ -80,8 +80,20 @@ llm = OpenAI(
 )
 tavily = TavilyClient(api_key=_tavily_key)
 
-# BaoStock 用自己的 socket 协议，不走 HTTP/代理，登录一次全局复用
+# BaoStock 用自己的 socket 协议，不走 HTTP/代理，登录一次全局复用。
+# 但长期常驻进程（如 Railway 部署）中，这条 TCP 连接可能被对端或网络中间设备
+# 空闲断开，baostock 本身不会自动重连，因此这里查询失败时重新登录一次再试。
 _bs_login = bs.login()
+
+
+def _bs_query_history_with_retry(*args, **kwargs):
+    """带重连的 BaoStock 历史行情查询：底层 socket 断开时重新登录后重试一次。"""
+    rs = bs.query_history_k_data_plus(*args, **kwargs)
+    if rs is None or getattr(rs, "error_code", "0") != "0":
+        bs.logout()
+        bs.login()
+        rs = bs.query_history_k_data_plus(*args, **kwargs)
+    return rs
 
 # 按信噪比分层的域名白名单
 DOMAINS_FACTUAL = [
@@ -249,7 +261,7 @@ def analyze_stock(h: dict) -> dict:
         end    = datetime.now().strftime("%Y-%m-%d")
         start  = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")
 
-        rs = bs.query_history_k_data_plus(
+        rs = _bs_query_history_with_retry(
             f"{prefix}.{ticker}",
             "date,close,high,low,volume,turn,peTTM,pbMRQ",
             start_date=start, end_date=end,
