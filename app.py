@@ -67,12 +67,18 @@ def _load_env(path: str = ".env") -> None:
 
 _load_env()
 
-# ⚠️ 内部测试用：内嵌兜底密钥。测试结束后请去后台轮换这两个 key，并改回纯环境变量。
-_FALLBACK_LLM_KEY    = "sk-af8678304a6d4933b15435ed050d9726"
-_FALLBACK_TAVILY_KEY = "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"
+_llm_key    = os.environ.get("LLM_API_KEY", "").strip()
+_tavily_key = os.environ.get("TAVILY_API_KEY", "").strip()
 
-_llm_key    = os.environ.get("LLM_API_KEY", "").strip()    or _FALLBACK_LLM_KEY
-_tavily_key = os.environ.get("TAVILY_API_KEY", "").strip() or _FALLBACK_TAVILY_KEY
+_missing_keys = [name for name, value in (
+    ("LLM_API_KEY", _llm_key),
+    ("TAVILY_API_KEY", _tavily_key),
+) if not value]
+if _missing_keys:
+    raise RuntimeError(
+        f"缺少必需的环境变量：{', '.join(_missing_keys)}。"
+        "请在 .env 或 Railway 的环境变量配置中设置后再启动。"
+    )
 
 llm = OpenAI(
     api_key=_llm_key,
