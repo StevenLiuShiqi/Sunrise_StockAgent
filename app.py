@@ -29,6 +29,7 @@ os.environ["no_proxy"] = "*"
 import pandas as pd
 import requests as _req
 import baostock as bs
+import baostock.common.context as _bs_context
 
 # urllib.request 默认会读 macOS 系统代理（getproxies()），
 # 装一个空的 ProxyHandler 覆盖掉，让 fetch_valuation 直连腾讯财经。
@@ -89,15 +90,30 @@ tavily = TavilyClient(api_key=_tavily_key)
 # BaoStock 用自己的 socket 协议，不走 HTTP/代理，登录一次全局复用。
 # 但长期常驻进程（如 Railway 部署）中，这条 TCP 连接可能被对端或网络中间设备
 # 空闲断开，baostock 本身不会自动重连，因此这里查询失败时重新登录一次再试。
+# 另外 baostock 底层 socket 默认没有超时（无论是 connect 还是 recv），
+# 一旦云端网络把这条连接静默丢包（连接看似建立、但对方永不回包，常见于
+# 跨境访问被中间设备拦截的场景），recv() 会永久阻塞，导致整个请求卡死。
+# 因此这里显式给 socket 设置超时，把"无限期卡住"转成"超时后走重试/降级"。
+_BS_SOCKET_TIMEOUT_SEC = 15
+
+
+def _bs_set_socket_timeout() -> None:
+    sock_obj = getattr(_bs_context, "default_socket", None)
+    if sock_obj is not None:
+        sock_obj.settimeout(_BS_SOCKET_TIMEOUT_SEC)
+
+
 _bs_login = bs.login()
+_bs_set_socket_timeout()
 
 
 def _bs_query_history_with_retry(*args, **kwargs):
-    """带重连的 BaoStock 历史行情查询：底层 socket 断开时重新登录后重试一次。"""
+    """带重连和超时保护的 BaoStock 历史行情查询：底层 socket 断开或长时间无响应时重新登录后重试一次。"""
     rs = bs.query_history_k_data_plus(*args, **kwargs)
     if rs is None or getattr(rs, "error_code", "0") != "0":
         bs.logout()
         bs.login()
+        _bs_set_socket_timeout()
         rs = bs.query_history_k_data_plus(*args, **kwargs)
     return rs
 
