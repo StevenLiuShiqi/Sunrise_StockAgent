@@ -40,12 +40,18 @@ _watch_queues: dict[str, asyncio.Queue] = {}
 
 @app.get("/")
 def index():
-    return FileResponse(BASE_DIR / "index.html")
+    return FileResponse(BASE_DIR / "terminal.html")
 
 
 @app.get("/terminal")
 def terminal():
     return FileResponse(BASE_DIR / "terminal.html")
+
+
+@app.get("/batch")
+def batch():
+    """原来的批量选股分析页面，根路径换成交易终端后挪到这里，功能不变。"""
+    return FileResponse(BASE_DIR / "index.html")
 
 
 @app.get("/stock/{ticker}/klines")
