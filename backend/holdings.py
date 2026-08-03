@@ -1,4 +1,9 @@
-"""持仓数据加载。"""
+"""持仓数据加载与持久化。
+
+不在模块级缓存 HOLDINGS/RISK_PROFILE 常量——交易终端下单会直接改写 holdings.json，
+如果只在进程启动时读一次，后续交易不会反映到下一次 AI 分析里。改成每次都从磁盘
+读，对这么小的 JSON 文件性能完全不是问题，正确性优先。
+"""
 
 import json
 from pathlib import Path
@@ -17,4 +22,9 @@ def load_holdings() -> tuple[list[dict], str]:
         raise RuntimeError(f"持仓文件格式错误：{e}")
 
 
-HOLDINGS, RISK_PROFILE = load_holdings()
+def save_holdings(holdings: list[dict], risk_profile: str) -> None:
+    """把持仓列表和整体风险偏好写回 holdings.json。"""
+    data = {"risk_profile": risk_profile, "holdings": holdings}
+    HOLDINGS_FILE.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )

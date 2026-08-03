@@ -24,7 +24,10 @@ from langgraph.types import Command
 from pydantic import BaseModel
 
 from backend.graph import research_graph
-from backend.holdings import HOLDINGS
+from backend.holdings import load_holdings
+from backend.kline_api import fetch_kline_series
+from backend.market_data import fetch_valuation
+from backend.paper_trading import get_paper_orders, get_paper_positions, place_paper_order
 from backend.progress import emitter_storage
 
 app = FastAPI(title="隐私确认闸门 demo")
@@ -40,9 +43,31 @@ def index():
     return FileResponse(BASE_DIR / "index.html")
 
 
+@app.get("/terminal")
+def terminal():
+    return FileResponse(BASE_DIR / "terminal.html")
+
+
+@app.get("/stock/{ticker}/klines")
+def get_stock_klines(ticker: str):
+    """交易终端K线图数据，真实数据（BaoStock），不附带技术指标。"""
+    try:
+        return fetch_kline_series(ticker)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"K线拉取失败（{type(e).__name__}）：{e}")
+
+
+@app.get("/stock/{ticker}/quote")
+def get_stock_quote(ticker: str):
+    """交易终端轮询用的实时快照价格（腾讯行情，非逐笔推送）。"""
+    return fetch_valuation(ticker)
+
+
 @app.get("/holdings")
 def get_holdings_list():
-    """返回持仓展示字段供前端选股面板使用（含 qty/cost）。"""
+    """返回持仓展示字段供前端选股面板使用（含 qty/cost）。每次都读最新文件——
+    交易终端下单会直接改 holdings.json，选股面板要看到刚交易完的结果。"""
+    holdings, _ = load_holdings()
     return [
         {
             "ticker":        h["ticker"],
@@ -54,7 +79,7 @@ def get_holdings_list():
             "hold_period":   h.get("hold_period", "mid"),
             "notes":         h.get("notes", ""),
         }
-        for h in HOLDINGS
+        for h in holdings
     ]
 
 
@@ -106,6 +131,31 @@ async def stream_research(tickers: str = "", deep: bool = False):
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+class PaperOrderReq(BaseModel):
+    ticker: str
+    side:   str  # "buy" | "sell"
+    qty:    int
+
+
+@app.post("/paper/order")
+def post_paper_order(req: PaperOrderReq):
+    """模拟下单：市价单，按当前快照价立即全部成交。不对接任何真实交易系统。"""
+    try:
+        return place_paper_order(req.ticker, req.side, req.qty)
+    except (ValueError, RuntimeError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/paper/positions")
+def get_paper_positions_route():
+    return get_paper_positions()
+
+
+@app.get("/paper/orders")
+def get_paper_orders_route():
+    return get_paper_orders()
 
 
 class ConfirmReq(BaseModel):

@@ -1,13 +1,17 @@
-"""实时估值（腾讯财经）+ 历史行情（BaoStock）+ 本地技术分析。"""
+"""实时估值 + 历史行情（都是腾讯数据源，前者直连 API，后者走 akshare）+ 本地技术分析。
+
+历史行情原来走 BaoStock，但它的账号会被服务器无预警拉黑（撞到过 bs.login()
+直接卡死不返回的真实故障），而且拉黑后完全没有自助恢复的办法。换成 akshare 的
+stock_zh_a_hist_tx()（本质是套壳腾讯行情 API），跟 fetch_valuation() 用的是
+同一家数据源，这台机器上实测过是通的。
+"""
 
 from datetime import datetime, timedelta
 
-from . import config  # noqa: F401  先清代理环境变量，再 import baostock
+from . import config  # noqa: F401  先清代理环境变量，再 import akshare
 
-import pandas as pd
+import akshare as ak
 import requests as _req
-import baostock as bs
-import baostock.common.context as _bs_context
 
 from .indicators import (
     calc_rsi, rsi_signal,
@@ -22,35 +26,34 @@ from .valuation_history import fetch_valuation_percentile
 # 250 交易日 ≈ 一年，日历天数要留足周末/节假日的余量，否则拿不到 250 根实际K线。
 HISTORY_WINDOW_DAYS = 400
 
-# BaoStock 用自己的 socket 协议，不走 HTTP/代理，登录一次全局复用。
-# 但长期常驻进程（如 Railway 部署）中，这条 TCP 连接可能被对端或网络中间设备
-# 空闲断开，baostock 本身不会自动重连，因此这里查询失败时重新登录一次再试。
-# 另外 baostock 底层 socket 默认没有超时（无论是 connect 还是 recv），
-# 一旦云端网络把这条连接静默丢包（连接看似建立、但对方永不回包，常见于
-# 跨境访问被中间设备拦截的场景），recv() 会永久阻塞，导致整个请求卡死。
-# 因此这里显式给 socket 设置超时，把"无限期卡住"转成"超时后走重试/降级"。
-_BS_SOCKET_TIMEOUT_SEC = 15
+_HIST_TIMEOUT_SEC = 10  # stock_zh_a_hist_tx 默认不设超时，显式传一个，避免网络异常时卡死
 
 
-def _bs_set_socket_timeout() -> None:
-    sock_obj = getattr(_bs_context, "default_socket", None)
-    if sock_obj is not None:
-        sock_obj.settimeout(_BS_SOCKET_TIMEOUT_SEC)
+def fetch_ohlcv_df(ticker: str, days: int = HISTORY_WINDOW_DAYS) -> "pd.DataFrame":
+    """历史行情（腾讯，经 akshare），返回列：date/开盘/最高/最低/收盘/成交量/换手率
+    （换手率已从 akshare 的小数形式换算成百分比数字，跟原来 BaoStock 的口径一致；
+    数值列已是 float）。analyze_stock() 和 kline_api.fetch_kline_series() 共用
+    这个函数，避免重复实现查询逻辑。失败时直接抛出异常，由调用方决定怎么处理
+    （analyze_stock 会降级成模拟数据，K线接口应该让请求报错，不该假装有数据）。
+    """
+    prefix = "sh" if ticker.startswith(("6", "9")) else ("bj" if ticker.startswith("8") else "sz")
+    end    = datetime.now().strftime("%Y%m%d")
+    start  = (datetime.now() - timedelta(days=days)).strftime("%Y%m%d")
 
+    df = ak.stock_zh_a_hist_tx(
+        symbol=f"{prefix}{ticker}",
+        start_date=start, end_date=end,
+        adjust="qfq", timeout=_HIST_TIMEOUT_SEC,
+    )
+    if df is None or df.empty:
+        raise RuntimeError(f"{ticker} 没有可用的历史行情数据")
 
-_bs_login = bs.login()
-_bs_set_socket_timeout()
-
-
-def _bs_query_history_with_retry(*args, **kwargs):
-    """带重连和超时保护的 BaoStock 历史行情查询：底层 socket 断开或长时间无响应时重新登录后重试一次。"""
-    rs = bs.query_history_k_data_plus(*args, **kwargs)
-    if rs is None or getattr(rs, "error_code", "0") != "0":
-        bs.logout()
-        bs.login()
-        _bs_set_socket_timeout()
-        rs = bs.query_history_k_data_plus(*args, **kwargs)
-    return rs
+    df = df.rename(columns={
+        "open": "开盘", "close": "收盘", "high": "最高", "low": "最低",
+        "volume": "成交量", "turnover": "换手率",
+    })
+    df["换手率"] = df["换手率"] * 100
+    return df
 
 
 def fetch_valuation(ticker: str) -> dict:
@@ -85,40 +88,20 @@ def analyze_stock(h: dict) -> dict:
     item.update({
         "price":   valuation["price"],
         "mcap_yi": valuation["mcap_yi"],
-        "pe_ttm":  valuation["pe_ttm"],   # 占位，BaoStock 成功后会覆盖
+        "pe_ttm":  valuation["pe_ttm"],
         "pb":      valuation["pb"],
     })
     if valuation["price"]:
         emit(f"  当前价={valuation['price']}  市值={valuation['mcap_yi']:.0f}亿", ticker=ticker)
 
-    emit(f"📡 拉取 {name}（{ticker}）历史行情（BaoStock）…", ticker=ticker)
+    emit(f"📡 拉取 {name}（{ticker}）历史行情…", ticker=ticker)
 
     try:
-        prefix = "sh" if ticker.startswith(("6", "9")) else ("bj" if ticker.startswith("8") else "sz")
-        end    = datetime.now().strftime("%Y-%m-%d")
-        start  = (datetime.now() - timedelta(days=HISTORY_WINDOW_DAYS)).strftime("%Y-%m-%d")
+        df = fetch_ohlcv_df(ticker, HISTORY_WINDOW_DAYS)
 
-        rs = _bs_query_history_with_retry(
-            f"{prefix}.{ticker}",
-            "date,close,high,low,volume,turn,peTTM,pbMRQ",
-            start_date=start, end_date=end,
-            frequency="d", adjustflag="2",
-        )
-        raw = rs.get_data()
-        for col in ["close", "high", "low", "volume", "turn", "peTTM", "pbMRQ"]:
-            raw[col] = pd.to_numeric(raw[col], errors="coerce")
-        raw = raw.dropna(subset=["close"])
-
-        # 重命名以复用现有计算逻辑
-        df = raw.rename(columns={
-            "close": "收盘", "high": "最高", "low": "最低",
-            "volume": "成交量", "turn": "换手率",
-        })
-
-        # PE/PB 直接从 BaoStock 拿，覆盖腾讯财经的估算值
-        last_pe = float(raw["peTTM"].iloc[-1]) if raw["peTTM"].iloc[-1] else 0
-        last_pb = float(raw["pbMRQ"].iloc[-1]) if raw["pbMRQ"].iloc[-1] else 0
-        item.update({"pe_ttm": round(last_pe, 2), "pb": round(last_pb, 2)})
+        # PE/PB 历史K线源不带估值字段了，直接用上面腾讯快照的值
+        last_pe = valuation["pe_ttm"]
+        last_pb = valuation["pb"]
         emit(f"  PE(TTM)={last_pe:.1f}x  PB={last_pb:.2f}x  市值={valuation['mcap_yi']:.0f}亿", ticker=ticker)
 
         emit(f"📐 {name} 拉取历史估值分位…", ticker=ticker)

@@ -7,7 +7,7 @@
 
 import json
 
-from .config import MODEL_STANDARD, llm
+from .config import MODEL_PRO, MODEL_STANDARD, llm
 from .json_utils import strip_code_fence
 from .progress import emit
 
@@ -128,10 +128,13 @@ PB：{pb_str}
 只输出 JSON 数组本身，不要 markdown 代码块，不要其他任何文字。"""
 
     try:
+        # MODEL_PRO 是推理模型，实测这个 prompt 的 reasoning_content 用量波动很大
+        # （信号越矛盾——比如风险背离——想得越多，观测到 205~1800 token 都有），
+        # max_tokens 留够余量，别直接照搬 MODEL_STANDARD 时代的 600。
         resp = llm.chat.completions.create(
-            model=MODEL_STANDARD,
+            model=MODEL_PRO,
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=600,
+            max_tokens=4000,
             temperature=0.7,
         )
         raw       = resp.choices[0].message.content.strip()

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>交易终端 · 曦望</title>
+<script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+<script src="https://unpkg.com/lightweight-charts@5.2.0/dist/lightweight-charts.standalone.production.js"></script>
+<link rel="stylesheet" href="/static/terminal.css" />
+</head>
+<body>
+<div class="terminal-layout">
+
+  <!-- ═══ 左侧：K线 + 下单 + 持仓/委托 ═══ -->
+  <div class="terminal-left">
+    <div>
+      <div class="eyebrow">交易终端 · 模拟盘</div>
+      <p class="sub">点选一支持仓股票查看K线，右侧 AI 助理会自动针对这支股票开始分析。下单完全模拟，按当前快照价立即成交。</p>
+    </div>
+
+    <div class="stock-picker-bar" id="stockPickerBar">
+      <span class="ai-log-empty">加载持仓中…</span>
+    </div>
+
+    <div class="chart-panel">
+      <div class="chart-header">
+        <span class="chart-ticker" id="chartTicker">选择一支股票开始</span>
+        <span class="chart-price" id="chartPrice"></span>
+      </div>
+      <div class="chart-container" id="chartContainer">
+        <div class="chart-empty" id="chartEmpty">在上面选一支股票，加载K线</div>
+      </div>
+    </div>
+
+    <div class="order-panel">
+      <div class="order-form">
+        <input type="number" id="orderQty" placeholder="数量（股，100的整数倍）" min="100" step="100" value="100" />
+        <button class="btn-buy"  id="buyBtn"  disabled>买入</button>
+        <button class="btn-sell" id="sellBtn" disabled>卖出</button>
+      </div>
+      <div class="order-msg" id="orderMsg"></div>
+    </div>
+
+    <div class="tables-panel">
+      <div class="table-block">
+        <div class="table-title">模拟持仓</div>
+        <table class="data-table" id="positionsTable">
+          <thead><tr><th>股票</th><th>数量</th><th>成本</th><th>现价</th><th>浮动盈亏</th></tr></thead>
+          <tbody><tr class="empty-row"><td colspan="5">暂无持仓</td></tr></tbody>
+        </table>
+      </div>
+      <div class="table-block">
+        <div class="table-title">委托记录</div>
+        <table class="data-table" id="ordersTable">
+          <thead><tr><th>时间</th><th>股票</th><th>方向</th><th>数量</th><th>价格</th></tr></thead>
+          <tbody><tr class="empty-row"><td colspan="5">暂无委托</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ 右侧：AI 研究助理（单股票模式，复用 /research/stream） ═══ -->
+  <div class="terminal-right">
+    <div class="eyebrow">🔒 AI 研究助理</div>
+
+    <div class="ai-steps" id="aiSteps">
+      <div class="ai-step" data-step="local">
+        <span class="ai-step-icon">🔍</span><span class="ai-step-label">本地分析</span>
+      </div>
+      <div class="ai-step-connector"></div>
+      <div class="ai-step" data-step="gate">
+        <span class="ai-step-icon">🔒</span><span class="ai-step-label">隐私闸门</span>
+      </div>
+      <div class="ai-step-connector"></div>
+      <div class="ai-step" data-step="cloud">
+        <span class="ai-step-icon">☁️</span><span class="ai-step-label">云端调研</span>
+      </div>
+      <div class="ai-step-connector"></div>
+      <div class="ai-step" data-step="fusion">
+        <span class="ai-step-icon">✅</span><span class="ai-step-label">本地综合</span>
+      </div>
+    </div>
+
+    <div class="ai-feed" id="aiFeed">
+      <div class="ai-feed-empty" id="aiFeedEmpty">选择左侧股票后，点击"开始分析"。</div>
+    </div>
+
+    <div class="ai-chat-input">
+      <input type="text" placeholder="追问功能即将支持…" disabled />
+      <button disabled>➤</button>
+    </div>
+    <div class="ai-chat-disclaimer">AI 生成内容仅供参考，不构成投资建议</div>
+  </div>
+
+</div>
+
+<script src="/static/terminal.js"></script>
+</body>
+</html>

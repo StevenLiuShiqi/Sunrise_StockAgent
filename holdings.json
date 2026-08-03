@@ -5,8 +5,11 @@
       "ticker": "600570",
       "name": "恒生电子",
       "qty": 3000,
-      "cost": 34.20,
-      "industry_tags": ["金融科技", "软件"],
+      "cost": 34.2,
+      "industry_tags": [
+        "金融科技",
+        "软件"
+      ],
       "risk_level": "medium",
       "hold_period": "long",
       "notes": "核心仓位，看好金融IT国产化替代逻辑"
@@ -15,8 +18,11 @@
       "ticker": "000858",
       "name": "五粮液",
       "qty": 500,
-      "cost": 128.60,
-      "industry_tags": ["白酒", "消费"],
+      "cost": 128.6,
+      "industry_tags": [
+        "白酒",
+        "消费"
+      ],
       "risk_level": "low",
       "hold_period": "long",
       "notes": "防御仓，消费白马，估值相对合理"
@@ -25,8 +31,12 @@
       "ticker": "300750",
       "name": "宁德时代",
       "qty": 200,
-      "cost": 187.40,
-      "industry_tags": ["新能源", "动力电池", "制造"],
+      "cost": 187.4,
+      "industry_tags": [
+        "新能源",
+        "动力电池",
+        "制造"
+      ],
       "risk_level": "high",
       "hold_period": "mid",
       "notes": "弹性仓，波动大，关注海外扩张进展"
@@ -34,9 +44,12 @@
     {
       "ticker": "601318",
       "name": "中国平安",
-      "qty": 2000,
-      "cost": 41.80,
-      "industry_tags": ["保险", "金融"],
+      "qty": 1800,
+      "cost": 41.8,
+      "industry_tags": [
+        "保险",
+        "金融"
+      ],
       "risk_level": "low",
       "hold_period": "long",
       "notes": "红利仓，高股息，套息逻辑"
@@ -45,8 +58,12 @@
       "ticker": "002415",
       "name": "海康威视",
       "qty": 1500,
-      "cost": 29.10,
-      "industry_tags": ["安防", "AI视觉", "硬件"],
+      "cost": 29.1,
+      "industry_tags": [
+        "安防",
+        "AI视觉",
+        "硬件"
+      ],
       "risk_level": "medium",
       "hold_period": "mid",
       "notes": "关注AI摄像头出海及国内政府采购复苏"

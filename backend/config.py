@@ -1,10 +1,12 @@
-"""配置：代理清理、环境变量加载、LLM/Tavily 客户端、调研域名白名单。
+"""配置：代理清理、进程级 socket 超时、环境变量加载、LLM/Tavily 客户端、调研域名白名单。
 
-必须在任何 import baostock / akshare 之前执行完毕（清代理环境变量 + 装空 ProxyHandler），
-所以 market_data.py 和 cloud_research.py 都会先 `from . import config` 再导入这些库。
+必须在任何 import akshare 之前执行完毕（清代理环境变量 + 装空 ProxyHandler +
+设置默认 socket 超时），所以 market_data.py 和 cloud_research.py 都会先
+`from . import config` 再导入这些库。
 """
 
 import os
+import socket
 import urllib.request
 from pathlib import Path
 
@@ -21,6 +23,16 @@ os.environ["no_proxy"] = "*"
 urllib.request.install_opener(
     urllib.request.build_opener(urllib.request.ProxyHandler({}))
 )
+
+# 进程级默认 socket 超时兜底：不是每个第三方库都会自己管理超时（历史行情曾经用
+# BaoStock，它的 bs.login() 完全没有超时保护，网络异常时会永久挂起，导致整个
+# 进程起不来——这不是猜测的边界情况，是实测撞到的真实故障，服务器返回过
+# "黑名单用户"然后 bs.login() 直接卡死不返回）。BaoStock 已经换成走 akshare
+# 的腾讯数据源，但这个全局兜底留着——万一以后又接入类似的、自己不管理超时的库，
+# 不用重新踩一次坑。已验证过 httpx/openai SDK 会显式设置自己的 socket 超时，
+# 不受这个全局默认值影响。
+DEFAULT_SOCKET_TIMEOUT_SEC = 15
+socket.setdefaulttimeout(DEFAULT_SOCKET_TIMEOUT_SEC)
 
 from openai import OpenAI
 from tavily import TavilyClient

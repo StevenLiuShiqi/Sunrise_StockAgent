@@ -9,7 +9,7 @@ from langgraph.types import Command, interrupt
 from .cloud_research import akshare_research
 from .config import DOMAIN_MAP, DOMAINS_OPINION, MODEL_PRO, llm, tavily
 from .debate import bear_researcher_node, bull_researcher_node
-from .holdings import HOLDINGS, RISK_PROFILE
+from .holdings import load_holdings
 from .llm_questions import filter_snippets, llm_generate_questions
 from .market_data import analyze_stock, fetch_valuation
 from .portfolio_analysis import analyze_portfolio
@@ -32,9 +32,13 @@ class State(TypedDict, total=False):
 # ================= Agent A =================
 
 def agent_a_node(state: State) -> dict:
+    # 每次都从磁盘重新读，不用进程启动时缓存的旧值——交易终端的买卖会直接改
+    # holdings.json，要让每次分析都看到最新的持仓状态。
+    all_holdings, risk_profile = load_holdings()
+
     selected = state.get("selected_tickers") or []
-    holdings = [h for h in HOLDINGS if not selected or h["ticker"] in selected]
-    emit(f"📋 分析 {len(holdings)} 支股票（持仓共 {len(HOLDINGS)} 支）")
+    holdings = [h for h in all_holdings if not selected or h["ticker"] in selected]
+    emit(f"📋 分析 {len(holdings)} 支股票（持仓共 {len(all_holdings)} 支）")
 
     full_result        = []
     research_questions = []
@@ -71,7 +75,7 @@ def agent_a_node(state: State) -> dict:
             risk_level=analysis.get("risk_level", "medium"),
             hold_period=analysis.get("hold_period", "mid"),
             notes=analysis.get("notes", ""),
-            risk_profile=RISK_PROFILE,
+            risk_profile=risk_profile,
         )
 
         research_questions.append({
@@ -92,7 +96,7 @@ def agent_a_node(state: State) -> dict:
     # 被误判成"仓位100%"。没被选中深度分析的持仓，只拉一次实时价格用于算市值权重，
     # 不做技术指标/风险指标这些重分析（那些只有用户选中要看的股票才需要）。
     analyzed_tickers = {h["ticker"] for h in holdings}
-    other_holdings   = [h for h in HOLDINGS if h["ticker"] not in analyzed_tickers]
+    other_holdings   = [h for h in all_holdings if h["ticker"] not in analyzed_tickers]
 
     portfolio_positions = list(full_result)
     if other_holdings:
