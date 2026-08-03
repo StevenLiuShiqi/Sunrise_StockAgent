@@ -329,8 +329,27 @@ def _build_stock_sections(state: State) -> list[str]:
 
 
 def _portfolio_text(state: State) -> str:
-    warnings = (state.get("portfolio_summary") or {}).get("warnings") or []
-    return "\n".join(f"- {w}" for w in warnings) if warnings else "- 暂无明显集中度风险"
+    """始终展示完整持仓构成（不只是触发阈值才有的警告）——否则单独分析1支股票时
+    LLM 的 prompt 里完全看不到"这只是持仓里的一支，占比多少"这个信息，会把这支
+    股票当成仓位全部来分析，即便 analyze_portfolio() 早就正确算出了真实占比。
+    """
+    summary   = state.get("portfolio_summary") or {}
+    positions = summary.get("position_concentration") or []
+    if not positions:
+        return "- 暂无持仓组合数据"
+
+    total_value = summary.get("total_value") or 0
+    lines = [f"- 持仓组合共 {len(positions)} 支股票，总市值约 {total_value:,.0f} 元，各股占比："]
+    lines += [f"  - {p['name']}（{p['ticker']}）：{p['weight_pct']}%" for p in positions]
+
+    warnings = summary.get("warnings") or []
+    if warnings:
+        lines.append("- 集中度提示：")
+        lines += [f"  - {w}" for w in warnings]
+    else:
+        lines.append("- 暂无明显集中度风险")
+
+    return "\n".join(lines)
 
 
 def _format_case(case: dict, label: str) -> str:
